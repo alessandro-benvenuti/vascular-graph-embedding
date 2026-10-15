@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# This file is sourced by both interactive shells and strict-mode Slurm jobs.
+# Do not mutate the caller's shell options here.
 module purge
 module load pytorch-gpu/py3/2.3.0
 VGE_ENV_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
