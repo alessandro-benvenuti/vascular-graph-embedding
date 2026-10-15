@@ -1,0 +1,5 @@
+seed: 20261015
+study: {patches: 25, maximum_active_nodes_for_exhaustive: 8, timeout_seconds: 30}
+solver: {preferred: gurobi, optional: true, formulation: quadratic_assignment_with_dummy_insertions_and_deletions}
+distance: {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 1, lambda_coordinate: 1, lambda_edge: 1}
+

@@ -1,0 +1,12 @@
+seed: 20261015
+data:
+  split: train
+  patch_index: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/patch_index.csv
+  vtp_root: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/train/vtp
+  empirical_root: /lustre/fswork/projects/rech/vnc/upz73jr/analysis/vascular-corruptions-full/empirical_corruption_model
+  empirical_refit: /lustre/fswork/projects/rech/vnc/upz73jr/analysis/vascular-corruptions-full/empirical_corruption_model/refit_v2
+graph: {slots: 120, coordinate_order: DHW, coordinate_storage: voxel, normalization: index_divided_by_axis_size, background_presence: 0.01, retained_presence: 0.98, retained_edge_probability: 0.97, volume_shape: [64, 64, 64]}
+study: {mode: empirical, patches: 200, pairs_per_patch: 5, stages: [200, 300, 400, 500], sampler: complete_profile_empirical, bounded_retries: 20, fallback: record_partial_without_relaxation}
+distances:
+  - {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 1, lambda_coordinate: 1, lambda_edge: 1}
+

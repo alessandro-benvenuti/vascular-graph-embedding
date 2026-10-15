@@ -1,0 +1,17 @@
+seed: 20261015
+data: {split: train, patch_index: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/patch_index.csv, vtp_root: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/train/vtp}
+graph: {slots: 120, coordinate_order: DHW, coordinate_storage: voxel, normalization: index_divided_by_axis_size, background_presence: 0.01, retained_presence: 0.98, retained_edge_probability: 0.97, volume_shape: [64, 64, 64]}
+study:
+  mode: controlled
+  patches: 200
+  families: [retained_node_confidence, coordinate_displacement, missing_node, missing_edge, generic_extra_node, duplicate, split_node, subdivision, generic_false_edge, loop_forming_edge, missing_node_false_shortcut, missing_node_missing_edge_elsewhere, duplicate_altered_attachments, subdivision_loop_shortcut, displacement_confidence_reduction]
+  counts: [0, 1, 2, 4]
+  intensity_levels: [0.2, 0.4, 0.6, 0.8, 1.0]
+  repetitions: 5
+distances:
+  - {plugin: soft_geometric_edit_v1, normalization: raw, lambda_node: 1, lambda_coordinate: 1, lambda_edge: 1}
+  - {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 1, lambda_coordinate: 1, lambda_edge: 1}
+  - {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 0.5, lambda_coordinate: 1, lambda_edge: 2}
+  - {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 2, lambda_coordinate: 1, lambda_edge: 0.5}
+  - {plugin: soft_geometric_edit_v1, normalization: gt, lambda_node: 1, lambda_coordinate: 1, lambda_edge: 1, coordinate_scale: [64, 64, 64]}
+
