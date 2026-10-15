@@ -10,7 +10,7 @@
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.out
 set -euo pipefail
-source "${VGE_REPO_DIR:-$WORK/projects/vascular-graph-embedding}/cluster/jean_zay/env_cpu.sh"
+source "${SLURM_SUBMIT_DIR:?Submit from the repository root}/cluster/jean_zay/env_cpu.sh"
 RUN_NAME="${RUN_NAME:-smoke-${SLURM_JOB_ID}}"; OUT="$VGE_OUTPUT_ROOT/$RUN_NAME"
 python scripts/generate_pairs.py --config configs/smoke.yaml --output "$OUT"
 python scripts/compute_distances.py --config configs/smoke.yaml --run "$OUT"

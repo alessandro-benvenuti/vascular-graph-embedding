@@ -10,6 +10,6 @@
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.out
 set -euo pipefail
-source "${VGE_REPO_DIR:-$WORK/projects/vascular-graph-embedding}/cluster/jean_zay/env_cpu.sh"
+source "${SLURM_SUBMIT_DIR:?Submit from the repository root}/cluster/jean_zay/env_cpu.sh"
 python scripts/preflight.py --config configs/smoke.yaml --output "$TMPDIR/vge-preflight-pair.npz"
 
