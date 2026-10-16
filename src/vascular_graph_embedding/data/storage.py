@@ -71,7 +71,17 @@ class PairArchiveWriter:
         if self.handle is not None:
             self.handle.close()
         if exc_type is None:
-            self.temporary.replace(self.path)
+            if self.temporary.exists():
+                self.temporary.replace(self.path)
+            elif self.path.exists():
+                # Treat repeated finalization as success only when the already
+                # published archive is structurally intact.
+                with zipfile.ZipFile(self.path) as published:
+                    corrupt = published.testzip()
+                if corrupt is not None:
+                    raise RuntimeError(f"published pair archive is corrupt at {corrupt}")
+            else:
+                raise FileNotFoundError(f"neither temporary nor published pair archive exists for {self.path}")
 
 
 def load_pair(path: Path | str) -> tuple[SoftGraph, SoftGraph, Correspondence, dict[str, Any]]:
