@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-REPO="$(git rev-parse --show-toplevel)"
+SUBMIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$SUBMIT_SCRIPT_DIR/../.." && pwd -P)"
 ROOT="${VGE_OUTPUT_ROOT:-$WORK/analysis/vascular-graph-embedding}"
 mkdir -p "$ROOT/job_ids"
 cd "$REPO"
