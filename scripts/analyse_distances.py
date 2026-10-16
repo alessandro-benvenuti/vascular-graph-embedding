@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,json
+import argparse,json,os
 import numpy as np
 from pathlib import Path
 import matplotlib
@@ -55,7 +55,11 @@ def main():
         gt,candidate,_,_=load_pair(run/row.path);ax=fig.add_subplot(2,2,pos,projection="3d");active=np.flatnonzero(candidate.presence>.05);ax.scatter(candidate.coordinates[active,2],candidate.coordinates[active,1],candidate.coordinates[active,0],c=candidate.presence[active],vmin=0,vmax=1,cmap="viridis",s=12);ax.scatter(gt.coordinates[gt.presence>.5,2],gt.coordinates[gt.presence>.5,1],gt.coordinates[gt.presence>.5,0],facecolors="none",edgecolors="black",s=18);ax.set_title(row.family,fontsize=8)
     fig.tight_layout();fig.savefig(plots/"graph_overlays_3d.png",dpi=160);plt.close(fig)
     summary={"pairs":int(df.pair_id.nunique()),"distance_rows":len(df),"families":sorted(df.family.unique()),"notes":["This is a correspondence-conditioned surrogate, not a proven metric or exact GED.","Count/intensity associations are partly built into the cost definition.","Different corruption families do not share a universal intensity scale.","Validation-derived empirical profiles are development input, not untouched final evaluation.","No detected thresholded error does not imply zero soft cost."]};atomic_json(run/"summary.json",summary)
-    report="# Corruption-distance study\n\n"+"\n".join(f"- {note}" for note in summary["notes"])+"\n\n## Local/cluster status\n\nResults describe only the environment in which these files were generated. Cluster verification remains pending until Jean Zay outputs are supplied.\n"
+    if os.environ.get("SLURM_JOB_ID"):
+        execution_note=f"This report was completed on Jean Zay by Slurm job `{os.environ['SLURM_JOB_ID']}`. This validates the current stage only; controlled, empirical, and solver stages require their own verification."
+    else:
+        execution_note="This report was generated locally. Jean Zay verification remains pending until cluster outputs are supplied."
+    report="# Corruption-distance study\n\n"+"\n".join(f"- {note}" for note in summary["notes"])+f"\n\n## Execution status\n\n{execution_note}\n"
     (run/"report.md").write_text(report);atomic_json(run/"COMPLETED.json",{"status":"complete","summary":"summary.json"});print(f"report complete: {run}")
 if __name__=="__main__":main()
 
