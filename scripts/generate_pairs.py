@@ -9,7 +9,7 @@ import pandas as pd
 from vascular_graph_embedding.corruptions import CorruptionGenerator
 from vascular_graph_embedding.corruptions.empirical import EmpiricalSampler
 from vascular_graph_embedding.data.manifest import load_patch_index, stratified_select
-from vascular_graph_embedding.data.storage import save_pair
+from vascular_graph_embedding.data.storage import PairArchiveWriter, save_pair
 from vascular_graph_embedding.data.vtp import read_vtp_graph
 from vascular_graph_embedding.experiments.common import load_config, prepare_run
 from vascular_graph_embedding.graphs.model import clean_fixed_graph
@@ -71,13 +71,18 @@ def empirical_operation(row):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--config",required=True);p.add_argument("--output",required=True);p.add_argument("--dry-run",action="store_true");p.add_argument("--synthetic-fixtures",action="store_true",help="local tests only; never represents a cluster data run");a=p.parse_args();cfg=load_config(a.config)
+    p=argparse.ArgumentParser();p.add_argument("--config",required=True);p.add_argument("--output",required=True);p.add_argument("--dry-run",action="store_true");p.add_argument("--synthetic-fixtures",action="store_true",help="local tests only; never represents a cluster data run");p.add_argument("--patch-offset",type=int,default=0);p.add_argument("--patch-limit",type=int);a=p.parse_args();cfg=load_config(a.config)
     patch_count=int(cfg["study"].get("patches",10));mode=cfg["study"].get("mode","controlled");specs=list(controlled_specs(cfg)) if mode=="controlled" else list(range(int(cfg["study"].get("pairs_per_patch",5))));pairs=patch_count*len(specs)
-    if a.dry_run:print(json.dumps({"patches":patch_count,"conditions_per_patch":len(specs),"pairs":pairs,"estimated_npz_gib":round(pairs*0.00025,3)},indent=2));return
-    out=prepare_run(cfg,a.output);(out/"pairs").mkdir(exist_ok=True);manifest=[];events=[];slots=int(cfg.get("graph",{}).get("slots",120));base_seed=int(cfg.get("seed",0));background=float(cfg.get("graph",{}).get("background_presence",0));retained=float(cfg.get("graph",{}).get("retained_presence",1));retained_edge=float(cfg.get("graph",{}).get("retained_edge_probability",1));bases=load_bases(cfg,patch_count,slots,a.synthetic_fixtures)
+    if a.dry_run:print(json.dumps({"patches":patch_count,"conditions_per_patch":len(specs),"pairs":pairs,"estimated_gib_at_11_kib_per_pair":round(pairs*11*1024/(1024**3),3),"pair_members":pairs,"recommended_storage":"zip archives per shard"},indent=2));return
+    cfg={**cfg,"shard":{"patch_offset":a.patch_offset,"patch_limit":a.patch_limit}}
+    out=prepare_run(cfg,a.output);(out/"pairs").mkdir(exist_ok=True);manifest=[];events=[];slots=int(cfg.get("graph",{}).get("slots",120));base_seed=int(cfg.get("seed",0));background=float(cfg.get("graph",{}).get("background_presence",0));retained=float(cfg.get("graph",{}).get("retained_presence",1));retained_edge=float(cfg.get("graph",{}).get("retained_edge_probability",1));all_bases=load_bases(cfg,patch_count,slots,a.synthetic_fixtures);end=None if a.patch_limit is None else a.patch_offset+a.patch_limit;bases=all_bases[a.patch_offset:end];pair_store=str(cfg.get("graph",{}).get("pair_store","files"));archive_context=PairArchiveWriter(out/"pairs"/"pairs.zip") if pair_store=="zip" else None
     empirical=EmpiricalSampler(cfg["data"]["empirical_root"],base_seed) if mode=="empirical" else None
     selection=[]
-    for patch,(patch_id,patient_id,gt,corr,source_meta) in enumerate(bases):
+    writer=archive_context.__enter__() if archive_context is not None else None
+    archive_success=False
+    try:
+      for local_patch,(patch_id,patient_id,gt,corr,source_meta) in enumerate(bases):
+        patch=a.patch_offset+local_patch
         selection.append({"patch_id":patch_id,"patient_id":patient_id,**source_meta})
         iteration_specs=specs
         for item in iteration_specs:
@@ -95,10 +100,17 @@ def main():
             ops=[{"family":family,"count":count,**params}] if mode=="controlled" else operations
             for operation in ops:operation.pop("source_event_id",None)
             generator=CorruptionGenerator(seed);result=generator.generate(base,corr,ops,pair_id=f"p{patch:04d}-{family}-c{count}-i{level}-r{rep}")
-            pair_id=result.metadata["pair_id"];relative=Path("pairs")/(pair_id+".npz");save_pair(out/relative,gt,result.graph,result.correspondence,{**result.metadata,"patch_id":patch_id,"patient_id":patient_id,"family":family,"count":count,"intensity_level":level,"intensity":intensity,"repetition":rep,"source_profile_id":None if source_profile is None else source_profile.get("source_profile_id")})
+            pair_id=result.metadata["pair_id"];pair_meta={**result.metadata,"patch_id":patch_id,"patient_id":patient_id,"family":family,"count":count,"intensity_level":level,"intensity":intensity,"repetition":rep,"source_profile_id":None if source_profile is None else source_profile.get("source_profile_id")}
+            if writer is not None:
+                member=pair_id+".npz";writer.write(member,gt,result.graph,result.correspondence,pair_meta);relative=f"pairs/pairs.zip::{member}"
+            else:
+                relative=str(Path("pairs")/(pair_id+".npz"));save_pair(out/relative,gt,result.graph,result.correspondence,pair_meta)
             realized=sum(event.realized for event in result.events);reasons=";".join(filter(None,(event.rejection_reason for event in result.events))) or None;manifest.append({"pair_id":pair_id,"path":str(relative),"patch_id":patch_id,"patient_id":patient_id,"family":family,"requested_count":count,"realized_count":realized,"intensity_level":level,"intensity":intensity,"repetition":rep,"seed":seed,"status":"ok" if realized==count else "skipped_or_partial","rejection_reason":reasons,"source_profile_id":None if source_profile is None else source_profile.get("source_profile_id")})
             source_event_ids=[row.get("source_event_id") for row in source_events]
             for event in result.events:events.append({"pair_id":pair_id,"source_profile_id":None if source_profile is None else source_profile.get("source_profile_id"),"source_event_ids":json.dumps(source_event_ids),**event.as_dict(),"parameters":json.dumps(event.parameters),"anchors":json.dumps(event.anchors),"owned_nodes":json.dumps(event.owned_nodes),"owned_edges":json.dumps(event.owned_edges)})
+      archive_success=True
+    finally:
+      if archive_context is not None:archive_context.__exit__(None if archive_success else RuntimeError,None,None)
     pd.DataFrame(manifest).to_csv(out/"pair_manifest.csv.gz",index=False);pd.DataFrame(events).to_csv(out/"edit_events.csv.gz",index=False);pd.DataFrame(selection).to_csv(out/"selection_manifest.csv",index=False)
     diagnostics=out/"sampling_diagnostics";diagnostics.mkdir(exist_ok=True);pd.DataFrame(manifest)[["pair_id","requested_count","realized_count","status","rejection_reason","source_profile_id"]].to_csv(diagnostics/"requested_vs_realized.csv",index=False)
     print(f"wrote {len(manifest)} reusable pairs to {out}")

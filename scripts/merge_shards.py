@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pandas as pd
+import yaml
+
+from vascular_graph_embedding.experiments.common import prepare_run
+
+
+def atomic_csv(frame: pd.DataFrame, path: Path, **kwargs) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    frame.to_csv(temporary, index=False, **kwargs)
+    temporary.replace(path)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run", required=True)
+    parser.add_argument("--expected-shards", type=int, required=True)
+    args = parser.parse_args()
+    run = Path(args.run)
+    shards = sorted(path.parent for path in (run / "shards").glob("*/SHARD_COMPLETED.json"))
+    if len(shards) != args.expected_shards:
+        raise RuntimeError(f"expected {args.expected_shards} completed shards, found {len(shards)}")
+    config = yaml.safe_load((shards[0] / "resolved_config.yaml").read_text())
+    config["aggregation"] = {"shards": [path.name for path in shards]}
+    prepare_run(config, run)
+    manifests=[];events=[];distances=[];selections=[];shard_rows=[]
+    for shard in shards:
+        manifest=pd.read_csv(shard/"pair_manifest.csv.gz")
+        manifest["path"]=manifest["path"].map(lambda value:f"shards/{shard.name}/{value}")
+        shard_distances=pd.read_csv(shard/"distance_results.csv.gz")
+        shard_distances["path"]=shard_distances["path"].map(lambda value:f"shards/{shard.name}/{value}")
+        manifests.append(manifest);events.append(pd.read_csv(shard/"edit_events.csv.gz"));distances.append(shard_distances);selections.append(pd.read_csv(shard/"selection_manifest.csv"))
+        shard_rows.append({"shard":shard.name,"pairs":len(manifest),"patches":manifest.patch_id.nunique()})
+    manifest=pd.concat(manifests,ignore_index=True)
+    if manifest.pair_id.duplicated().any():raise RuntimeError("duplicate pair IDs across shards")
+    distance=pd.concat(distances,ignore_index=True)
+    expected_variants=distance.variant.nunique()
+    if len(distance)!=len(manifest)*expected_variants:raise RuntimeError("distance rows do not cover every pair and variant")
+    atomic_csv(manifest,run/"pair_manifest.csv.gz",compression="gzip")
+    atomic_csv(pd.concat(events,ignore_index=True),run/"edit_events.csv.gz",compression="gzip")
+    atomic_csv(distance,run/"distance_results.csv.gz",compression="gzip")
+    atomic_csv(pd.concat(selections,ignore_index=True),run/"selection_manifest.csv")
+    atomic_csv(pd.DataFrame(shard_rows),run/"shard_manifest.csv")
+    print(f"merged {len(shards)} shards, {len(manifest)} pairs and {len(distance)} distance rows")
+
+
+if __name__ == "__main__":
+    main()
+

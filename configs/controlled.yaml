@@ -1,6 +1,6 @@
 seed: 20261015
 data: {split: train, patch_index: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/patch_index.csv, vtp_root: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary/train/vtp}
-graph: {slots: 120, coordinate_order: DHW, coordinate_storage: voxel, normalization: index_divided_by_axis_size, background_presence: 0.01, retained_presence: 0.98, retained_edge_probability: 0.97, volume_shape: [64, 64, 64]}
+graph: {slots: 120, coordinate_order: DHW, coordinate_storage: voxel, normalization: index_divided_by_axis_size, background_presence: 0.01, retained_presence: 0.98, retained_edge_probability: 0.97, volume_shape: [64, 64, 64], pair_store: zip}
 study:
   mode: controlled
   patches: 200

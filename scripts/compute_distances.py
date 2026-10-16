@@ -12,7 +12,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument("--config",required=True);p.add_argument("--run",required=True);a=p.parse_args();cfg=load_config(a.config);run=Path(a.run);manifest=pd.read_csv(run/"pair_manifest.csv.gz");rows=[]
     variants=cfg.get("distances",[{"plugin":"soft_geometric_edit_v1","normalization":"gt"}])
     for _,record in manifest.iterrows():
-        gt,candidate,corr,meta=load_pair(run/record["path"])
+        stored=str(record["path"]);pair_path=f"{run}/{stored}" if "::" not in stored else f"{run}/{stored.split('::',1)[0]}::{stored.split('::',1)[1]}";gt,candidate,corr,meta=load_pair(pair_path)
         for index,spec in enumerate(variants):
             options=dict(spec);name=options.pop("plugin");options["coordinate_scale"]=tuple(options.get("coordinate_scale",(1,1,1)));plugin=get_distance(name,**options);result=plugin.compute(gt,candidate,corr)
             baseline=gt.copy();graph_cfg=cfg.get("graph",{});background=float(graph_cfg.get("background_presence",0));baseline.presence[corr.slot_to_gt>=0]=float(graph_cfg.get("retained_presence",1));baseline.presence[corr.slot_to_gt<0]=background;baseline.conditional_edges[baseline.conditional_edges>0]=float(graph_cfg.get("retained_edge_probability",1));base_result=plugin.compute(gt,baseline,corr)

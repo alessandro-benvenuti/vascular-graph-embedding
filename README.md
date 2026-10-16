@@ -20,6 +20,8 @@ python scripts/benchmark_correspondence.py --run /tmp/vge-smoke --limit 25
 
 Generated datasets, runs, logs, environments and checkpoints belong outside Git. Pair archives are immutable inputs to distance plugins, so adding a plugin does not regenerate corruptions. Completed studies contain `COMPLETED.json` and are never silently overwritten.
 
+The main controlled grid is split into 20 ten-patch Slurm-array shards with at most four concurrent tasks. Each shard stores its pairs in one ZIP container rather than creating thousands of small Lustre files. A dependency job verifies and merges all shards before producing the aggregate plots and `COMPLETED.json`.
+
 ## Study stages
 
 1. `preflight.py` checks paths, split, dependencies, optional solver availability, and graph round-trip.
