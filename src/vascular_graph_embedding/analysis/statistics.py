@@ -12,9 +12,8 @@ def associations(frame: pd.DataFrame, x: str, y: str) -> dict[str, float | int]:
 
 
 def cluster_bootstrap_mean(frame: pd.DataFrame, value: str, cluster: str, seed: int=0, draws: int=1000) -> dict[str,float]:
-    groups=list(frame.groupby(cluster));rng=np.random.default_rng(seed);means=[]
-    if len(groups)<2:return {"mean":float(frame[value].mean()),"low":float("nan"),"high":float("nan"),"clusters":len(groups)}
-    for _ in range(draws):
-        chosen=rng.integers(len(groups),size=len(groups));sample=pd.concat([groups[i][1] for i in chosen]);means.append(sample[value].mean())
-    return {"mean":float(frame[value].mean()),"low":float(np.quantile(means,.025)),"high":float(np.quantile(means,.975)),"clusters":len(groups)}
+    aggregates=frame.groupby(cluster)[value].agg(["sum","count"]);rng=np.random.default_rng(seed);clusters=len(aggregates)
+    if clusters<2:return {"mean":float(frame[value].mean()),"low":float("nan"),"high":float("nan"),"clusters":clusters}
+    sums=aggregates["sum"].to_numpy(float);counts=aggregates["count"].to_numpy(float);chosen=rng.integers(clusters,size=(draws,clusters));means=sums[chosen].sum(axis=1)/counts[chosen].sum(axis=1)
+    return {"mean":float(frame[value].mean()),"low":float(np.quantile(means,.025)),"high":float(np.quantile(means,.975)),"clusters":clusters}
 

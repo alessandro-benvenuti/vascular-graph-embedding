@@ -33,11 +33,19 @@ def main() -> None:
             archive_members += len(handle.namelist())
     if archives and archive_members != len(pairs):
         raise RuntimeError(f"archive contains {archive_members} members for {len(pairs)} manifest rows")
+    topology_path=shard/"topology_results.csv.gz"
+    topology_rows=None
+    if topology_path.is_file():
+        topology=pd.read_csv(topology_path)
+        if len(topology)!=len(pairs) or topology.pair_id.duplicated().any():
+            raise RuntimeError("topology results do not cover every unique pair")
+        topology_rows=int(len(topology))
     atomic_json(shard / "SHARD_COMPLETED.json", {
         "status": "complete", "pairs": int(len(pairs)),
         "distance_rows": int(len(distances)), "distance_variants": variants,
         "pair_archives": len(archives), "archive_members": archive_members,
         "archive_integrity": "verified" if archives else "not_applicable",
+        "topology_rows": topology_rows,
     })
 
 

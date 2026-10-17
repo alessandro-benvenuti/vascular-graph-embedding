@@ -13,7 +13,7 @@ from vascular_graph_embedding.graphs.topology import topology_summary
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--run",required=True);a=p.parse_args();run=Path(a.run);df=pd.read_csv(run/"distance_results.csv.gz");plots=run/"plots";plots.mkdir(exist_ok=True)
+    p=argparse.ArgumentParser();p.add_argument("--run",required=True);a=p.parse_args();run=Path(a.run);df=pd.read_csv(run/"distance_results.csv.gz",low_memory=False);plots=run/"plots";plots.mkdir(exist_ok=True)
     summaries=[]
     for (variant,family),group in df.groupby(["variant","family"]):
         assoc=associations(group,"realized_count","total_cost");boot=cluster_bootstrap_mean(group,"total_cost","patient_id",draws=300);summaries.append({"variant":int(variant),"family":family,**assoc,**{f"bootstrap_{k}":v for k,v in boot.items()}})
@@ -27,11 +27,17 @@ def main():
         means=group.groupby("intensity_level")["total_cost"].mean();ax.plot(means.index,means.values,marker="o",label=family)
     ax.set(xlabel="within-family intensity level",ylabel="mean surrogate cost");ax.legend(fontsize=5,ncol=3);fig.tight_layout();fig.savefig(plots/"cost_vs_intensity.png",dpi=160);plt.close(fig)
     component=df.groupby("family")[["node_normalized","coordinate_normalized","edge_normalized"]].mean();component.plot.bar(stacked=True,figsize=(9,5)).figure.tight_layout();plt.savefig(plots/"component_contributions.png",dpi=160);plt.close()
-    topology=[]
-    for _,row in df.drop_duplicates("pair_id").iterrows():
-        stored=str(row.path);pair_path=f"{run}/{stored}" if "::" not in stored else f"{run}/{stored.split('::',1)[0]}::{stored.split('::',1)[1]}";gt,candidate,_,_=load_pair(pair_path);before=topology_summary(gt.presence,gt.effective_adjacency);after=topology_summary(candidate.presence,candidate.effective_adjacency);topology.append({"pair_id":row.pair_id,**{f"gt_{k}":v for k,v in before.items()},**{f"corrupted_{k}":v for k,v in after.items()}})
-    pd.DataFrame(topology).to_csv(run/"topology_results.csv.gz",index=False);pd.DataFrame(summaries).to_csv(run/"associations.csv",index=False)
-    merged=df.merge(pd.DataFrame(topology),on="pair_id",how="left");merged["delta_beta1"]=merged.corrupted_beta1-merged.gt_beta1
+    topology_path=run/"topology_results.csv.gz"
+    if topology_path.is_file():
+        topology_frame=pd.read_csv(topology_path)
+    else:
+        topology=[]
+        for _,row in df.drop_duplicates("pair_id").iterrows():
+            stored=str(row.path);pair_path=f"{run}/{stored}" if "::" not in stored else f"{run}/{stored.split('::',1)[0]}::{stored.split('::',1)[1]}";gt,candidate,_,_=load_pair(pair_path);before=topology_summary(gt.presence,gt.effective_adjacency);after=topology_summary(candidate.presence,candidate.effective_adjacency);topology.append({"pair_id":row.pair_id,**{f"gt_{k}":v for k,v in before.items()},**{f"corrupted_{k}":v for k,v in after.items()}})
+        topology_frame=pd.DataFrame(topology);topology_frame.to_csv(topology_path,index=False,compression="gzip")
+    if len(topology_frame)!=df.pair_id.nunique():raise RuntimeError("topology results do not cover every pair")
+    pd.DataFrame(summaries).to_csv(run/"associations.csv",index=False)
+    primary=df[df.variant==df.variant.min()];merged=primary.merge(topology_frame,on="pair_id",how="left");merged["delta_beta1"]=merged.corrupted_beta1-merged.gt_beta1
     fig,ax=plt.subplots(figsize=(6,5));ax.scatter(merged.realized_count,merged.total_cost,c=merged.delta_beta1,alpha=.35,s=12);ax.set(xlabel="realized events",ylabel="surrogate cost");fig.tight_layout();fig.savefig(plots/"empirical_mixture_scatter.png",dpi=160);plt.close(fig)
     fig,ax=plt.subplots(figsize=(7,4));df.boxplot(column="total_cost",by="family",ax=ax,rot=90);fig.suptitle("");fig.tight_layout();fig.savefig(plots/"cost_distributions.png",dpi=160);plt.close(fig)
     weights=df.groupby("variant")[["node_normalized","coordinate_normalized","edge_normalized","total_cost"]].mean();weights.plot.bar(figsize=(7,4)).figure.tight_layout();plt.savefig(plots/"weight_sensitivity.png",dpi=160);plt.close()
