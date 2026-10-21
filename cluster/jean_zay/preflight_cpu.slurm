@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=vge-preflight
+#SBATCH --job-name=vge-ged-preflight
 #SBATCH --account=vnc@cpu
 #SBATCH --qos=qos_cpu-t4
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=4
 #SBATCH --hint=nomultithread
-#SBATCH --time=00:15:00
+#SBATCH --time=01:00:00
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.out
 set -euo pipefail
-source "${SLURM_SUBMIT_DIR:?Submit from the repository root}/cluster/jean_zay/env_cpu.sh"
-python scripts/preflight.py --config configs/smoke.yaml --output "$TMPDIR/vge-preflight-pair.npz"
-
+source "${SLURM_SUBMIT_DIR:?Submit from repository root}/cluster/jean_zay/env_ged_cpu.sh"
+GED_CONFIG="${GED_CONFIG:-configs/ged_smoke.yaml}"
+python scripts/ged_preflight.py --config "$GED_CONFIG"

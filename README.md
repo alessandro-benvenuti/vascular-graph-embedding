@@ -35,3 +35,9 @@ The current local generator uses deterministic synthetic fixtures for offline va
 
 See [docs/study_design.md](docs/study_design.md) and [docs/jean_zay.md](docs/jean_zay.md).
 
+## Conventional GED go/no-go experiment
+
+The `codex/discrete-ged-go-no-go` workflow tests conventional solver-based GED on saved real RelationFormer validation predictions. It compares structural and geometric hard-graph GED against the saved Hungarian correspondence, reconstructable RelationFormer loss terms, audit proxies, and independent topology/structure metrics. Gurobi results are called GED only when certified optimal; timed-out values remain incumbent upper bounds with bounds and gaps.
+
+The workflow is deliberately staged: preflight, 2-patch smoke, 12-patch pilot, and an explicitly gated 50-patch main experiment. It does not train a Siamese or GREED-style encoder. See [docs/discrete_ged_go_no_go.md](docs/discrete_ged_go_no_go.md) for definitions, limitations, outputs, and the decision rule.
+

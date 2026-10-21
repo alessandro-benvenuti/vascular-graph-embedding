@@ -1,0 +1,18 @@
+schema: discrete-ged-study/v1
+seed: 20261021
+selection_seed: 20261021
+epochs: [200, 300, 400, 500]
+data:
+  prediction_root: /lustre/fswork/projects/rech/vnc/upz73jr/analysis/vascular-corruptions-full
+  validation_dataset: /lustre/fsn1/projects/rech/vnc/upz73jr/datasets/syntheticMRI/new_patches_boundary
+  relationformer_config_path: /lustre/fswork/projects/rech/vnc/upz73jr/analysis/vascular-corruptions-full/resolved_config.yaml
+output_root: /lustre/fswork/projects/rech/vnc/upz73jr/analysis/vascular-graph-embedding/discrete-ged-go-no-go
+stage: {name: pilot, sample_count: 12}
+thresholds:
+  - {node: 0.3, edge: 0.3}
+  - {node: 0.5, edge: 0.5}
+  - {node: 0.7, edge: 0.7}
+variants: [structural, geometric]
+costs: {node_insertion: 1.0, node_deletion: 1.0, edge_weight: 1.0, coordinate_units: normalized_by_median_gt_edge_length, coordinate_cap: 2.0}
+solver: {backend: gurobi_miqp, timeout_seconds: 60, seed: 20261021, threads: 1}
+analysis: {seed: 20261021, bootstrap_draws: 500, cv_folds: 4, similar_loss_tolerance: 0.05, substantial_ged_difference: 2.0}
