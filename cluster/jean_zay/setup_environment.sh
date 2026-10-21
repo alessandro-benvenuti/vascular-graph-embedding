@@ -9,6 +9,7 @@ VGE_REPO_DIR="${VGE_REPO_DIR:-$WORK/projects/vascular-graph-embedding}"
 VGE_GED_ENV_DIR="${VGE_GED_ENV_DIR:-$WORK/environments/vascular-graph-embedding-ged}"
 
 python -m venv --system-site-packages "$VGE_GED_ENV_DIR"
+"$VGE_GED_ENV_DIR/bin/python" -m pip install "gurobipy==13.0.1"
 "$VGE_GED_ENV_DIR/bin/python" -m pip install -e "$VGE_REPO_DIR"
 "$VGE_GED_ENV_DIR/bin/python" -c 'import gurobipy, matplotlib, numpy, pandas, scipy, torch, yaml; print("GED imports verified")'
 
