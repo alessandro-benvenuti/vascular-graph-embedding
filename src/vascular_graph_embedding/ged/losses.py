@@ -121,7 +121,7 @@ def reconstruct_losses(record: PredictionRecord, resolved_config: dict[str, Any]
     exact_total_available = not any(name in enabled for name in ("boxes", "edges")) and not enabled_betti
     missing_terms = []
     if "boxes" in enabled: missing_terms.append("box predictions were not saved")
-    if "edges" in enabled: missing_terms.append("training edge loss randomly selected pair direction; only both exported directions remain")
+    if "edges" in enabled: missing_terms.append("training edge loss used a random directed relation realization; only both exported directions remain")
     if enabled_betti: missing_terms.append("exact enabled Betti criterion values were not exported with the raw prediction record")
     return {
         "node_loss": node_loss, "coordinate_loss": coordinate_loss,

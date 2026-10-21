@@ -41,3 +41,7 @@ The `codex/discrete-ged-go-no-go` workflow tests conventional solver-based GED o
 
 The workflow is deliberately staged: preflight, 2-patch smoke, 12-patch pilot, and an explicitly gated 50-patch main experiment. It does not train a Siamese or GREED-style encoder. See [docs/discrete_ged_go_no_go.md](docs/discrete_ged_go_no_go.md) for definitions, limitations, outputs, and the decision rule.
 
+The no-new-solves follow-up in [docs/ged_baseline_decomposition.md](docs/ged_baseline_decomposition.md)
+separates continuous-loss, fixed-slot thresholding, saved-matching edit accounting,
+and optimized-correspondence effects using the completed main-run labels.
+

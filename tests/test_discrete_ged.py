@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -8,6 +9,11 @@ import pandas as pd
 import pytest
 
 from vascular_graph_embedding.ged.baseline import saved_matching_cost
+from vascular_graph_embedding.ged.decomposition import (
+    fixed_slot_disagreement, graph_size_normalizer, grouped_cv_extended,
+    mapping_change_count, multithreshold_aggregate, paired_checkpoint_rows,
+    patch_bootstrap, ranking_accuracy, sequential_gains, threshold_stability,
+)
 from vascular_graph_embedding.ged.extraction import extract_graphs
 from vascular_graph_embedding.ged.loader import EXPECTED_PAIRS, build_prediction_index, parse_record, softmax_positive
 from vascular_graph_embedding.ged.losses import classification_loss, reconstruct_losses
@@ -201,3 +207,97 @@ def test_grouped_bootstrap_and_cross_validation_keep_groups():
     metrics, predictions = grouped_linear_cv(frame, "y", ["x", "z"], "sample_id", folds=5, seed=3)
     assert interval["groups"] == 10 and interval["draws"] == 20
     assert metrics["r2"] == pytest.approx(1) and len(predictions) == len(frame)
+
+
+def two_node_slot_record(*, second_active=True, edge_active=True):
+    parsed = record()
+    node_probabilities = np.zeros(120); node_probabilities[0] = .9
+    node_probabilities[1] = .9 if second_active else .1
+    edge_probabilities = np.zeros(EXPECTED_PAIRS); edge_probabilities[0] = .9 if edge_active else .1
+    return replace(
+        parsed,
+        node_probabilities=node_probabilities,
+        edge_probabilities=edge_probabilities,
+        gt_nodes=np.asarray([[0., 0., 0.], [1., 0., 0.]]),
+        gt_edges=np.asarray([[0, 1]], dtype=int),
+        matched_queries=np.asarray([0, 1]), matched_gt=np.asarray([0, 1]),
+    )
+
+
+def test_fixed_slot_binary_node_edge_disagreement_and_normalization():
+    compatible = fixed_slot_disagreement(two_node_slot_record(), .5, .5)
+    assert compatible["binary_node_disagreement"] == 0
+    assert compatible["binary_edge_disagreement"] == 0
+    inactive = fixed_slot_disagreement(two_node_slot_record(second_active=False), .5, .5)
+    assert inactive["binary_node_disagreement"] == 1
+    assert inactive["binary_edge_disagreement"] == 1
+    assert inactive["binary_local_total_raw"] == 2
+    assert inactive["binary_local_total_normalized"] == pytest.approx(2 / 3)
+    assert graph_size_normalizer(2, 1) == 3
+
+
+def test_binary_and_valid_edit_cost_agree_when_incident_edges_are_charged():
+    parsed = two_node_slot_record(second_active=False)
+    binary = fixed_slot_disagreement(parsed, .5, .5)
+    predicted = HardGraph([[0, 0, 0]], np.empty((0, 2)), source_slots=[0])
+    truth = graph([[0, 0, 0], [1, 0, 0]], [[0, 1]])
+    saved = saved_matching_cost(predicted, truth, parsed, variant="structural", edge_weight=1)
+    assert binary["binary_local_total_raw"] == saved["saved_matching_edit_cost"] == 2
+
+
+def test_intentionally_bad_saved_mapping_is_improved_by_graph_structure():
+    predicted = HardGraph([[0,0,0],[1,0,0],[2,0,0]], [[0,1]], source_slots=[0,1,2])
+    truth = graph([[0,0,0],[1,0,0],[2,0,0]], [[0,2]])
+    parsed = replace(record(), gt_nodes=truth.coordinates, gt_edges=truth.edges,
+                     matched_queries=np.asarray([0,1,2]), matched_gt=np.asarray([0,1,2]))
+    saved = saved_matching_cost(predicted, truth, parsed, variant="structural", edge_weight=1)
+    optimized = ExhaustiveGraphEditDistance().compute(predicted, truth)
+    improvement = saved["saved_matching_edit_cost"] - optimized.distance
+    assert improvement >= 0
+    assert improvement == pytest.approx(2)
+    assert mapping_change_count(saved["saved_matching_node_mapping"], optimized.node_mapping) > 0
+
+
+def ranking_fixture():
+    rows = []
+    for sample in ("a", "b", "c"):
+        for epoch, value in zip((200, 300, 400, 500), (4., 3., 2., 1.)):
+            rows.append({"sample_id": sample, "epoch": epoch, "damage": value,
+                         "continuous": value if sample != "c" else 1., "binary": value,
+                         "saved": value, "optimized": value})
+    return pd.DataFrame(rows)
+
+
+def test_paired_rankings_ties_sequential_gains_and_patch_bootstrap_are_deterministic():
+    frame = ranking_fixture(); scores = ["continuous", "binary", "saved", "optimized"]
+    pairs = paired_checkpoint_rows(frame, scores, ["damage"], threshold_label=.5)
+    assert len(pairs) == 3 * 6 * 4
+    accuracy = ranking_accuracy(pairs); continuous = accuracy[accuracy.score == "continuous"].iloc[0]
+    assert continuous.score_ties == 6 and continuous.determinate_pairs == 12
+    gains = sequential_gains(accuracy, scores)
+    assert gains.iloc[0].thresholding_gain == pytest.approx(0)
+    first = patch_bootstrap(pairs, scores, draws=20, seed=11)
+    second = patch_bootstrap(pairs, scores, draws=20, seed=11)
+    pd.testing.assert_frame_equal(first, second)
+
+
+def test_grouped_cv_cross_threshold_stability_and_multithreshold_aggregation():
+    rows = []
+    for sample_id in [f"s{i}" for i in range(8)]:
+        offset = int(sample_id[1:])
+        for epoch in (200, 300, 400, 500):
+            for threshold in (.3, .5, .7):
+                x = offset + epoch / 1000 + threshold
+                rows.append({"sample_id": sample_id, "epoch": epoch, "node_threshold": threshold,
+                             "x": x, "y": 2*x, "score": x, "damage": 3*x})
+    frame = pd.DataFrame(rows)
+    metrics, predictions = grouped_cv_extended(frame, "y", ["x"], "sample_id", folds=4, seed=2)
+    assert metrics["r2"] == pytest.approx(1) and metrics["spearman"] == pytest.approx(1)
+    assert len(predictions) == len(frame)
+    stability = threshold_stability(frame, ["score"])
+    np.testing.assert_allclose(
+        stability.loc[stability.record_type == "rank_correlation", "spearman"].to_numpy(float), 1
+    )
+    assert stability.loc[stability.record_type == "checkpoint_flip", "flip_rate"].iloc[0] == 0
+    multi = multithreshold_aggregate(frame, ["score"], ["damage"])
+    assert len(multi) == 8 * 4 and (multi.threshold == "multithreshold").all()
