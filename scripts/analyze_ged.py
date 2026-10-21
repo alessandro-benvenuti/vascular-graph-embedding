@@ -25,6 +25,15 @@ ASSOCIATION_TARGETS = (
 )
 
 
+def json_default(value):
+    """Convert NumPy values produced by pandas rows to JSON-native values."""
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def atomic_csv(frame: pd.DataFrame, path: Path, **kwargs) -> None:
     temporary = path.with_name(path.name + ".tmp"); frame.to_csv(temporary, index=False, **kwargs); temporary.replace(path)
 
@@ -94,9 +103,10 @@ def disagreement_cases(frame: pd.DataFrame, loss_tolerance: float, ged_differenc
                         "topology_l1_a": left.topology_l1, "topology_l1_b": right.topology_l1,
                         "connectivity_a": left.matched_gt_connectivity_disagreement,
                         "connectivity_b": right.matched_gt_connectivity_disagreement,
-                        "operations_a": json.dumps({key: left[key] for key in ("node_insertions", "node_deletions", "edge_insertions", "edge_deletions")}),
-                        "operations_b": json.dumps({key: right[key] for key in ("node_insertions", "node_deletions", "edge_insertions", "edge_deletions")}),
-                        "node_mapping_a": json.dumps(left.node_mapping), "node_mapping_b": json.dumps(right.node_mapping),
+                        "operations_a": json.dumps({key: left[key] for key in ("node_insertions", "node_deletions", "edge_insertions", "edge_deletions")}, default=json_default),
+                        "operations_b": json.dumps({key: right[key] for key in ("node_insertions", "node_deletions", "edge_insertions", "edge_deletions")}, default=json_default),
+                        "node_mapping_a": json.dumps(left.node_mapping, default=json_default),
+                        "node_mapping_b": json.dumps(right.node_mapping, default=json_default),
                         "reason_selected": reason, "rank_score": ged_delta + structural_delta,
                     })
     return pd.DataFrame(rows).sort_values("rank_score", ascending=False) if rows else pd.DataFrame()
